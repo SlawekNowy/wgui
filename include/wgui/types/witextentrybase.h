@@ -8,15 +8,18 @@
 #include "wgui/wihandle.h"
 #include <util_formatted_text_types.hpp>
 #include <string_view>
-
-class WIText;
-class WIRect;
-class WITextDecorator;
+#ifdef __linux__
+import pragma.string.unicode;
+#else
 namespace pragma::string {
 	class Utf8String;
 	class Utf8StringView;
 	class Utf8StringArg;
 };
+#endif
+class WIText;
+class WIRect;
+class WITextDecorator;
 class DLLWGUI WITextEntryBase : public WIBase {
   public:
 	enum class StateFlags : uint32_t { None = 0u, Numeric = 1u, MultiLine = Numeric << 1u, Editable = MultiLine << 1u, Selectable = Editable << 1u };
@@ -35,9 +38,9 @@ class DLLWGUI WITextEntryBase : public WIBase {
 	void SetText(const pragma::string::Utf8StringArg &text);
 	void InsertText(const pragma::string::Utf8StringArg &instext, int pos);
 	void InsertText(const pragma::string::Utf8StringArg &text);
-	virtual util::EventReply MouseCallback(GLFW::MouseButton button, GLFW::KeyState state, GLFW::Modifier mods) override;
-	virtual util::EventReply KeyboardCallback(GLFW::Key key, int scanCode, GLFW::KeyState state, GLFW::Modifier mods) override;
-	virtual util::EventReply CharCallback(unsigned int c, GLFW::Modifier mods = GLFW::Modifier::None) override;
+	virtual util::EventReply MouseCallback(pragma::platform::MouseButton button, pragma::platform::KeyState state, pragma::platform::Modifier mods) override;
+	virtual util::EventReply KeyboardCallback(pragma::platform::Key key, int scanCode, pragma::platform::KeyState state, pragma::platform::Modifier mods) override;
+	virtual util::EventReply CharCallback(unsigned int c, pragma::platform::Modifier mods = pragma::platform::Modifier::None) override;
 	virtual util::EventReply OnDoubleClick() override;
 	virtual void SetSize(int x, int y) override;
 	int GetCaretPos() const;

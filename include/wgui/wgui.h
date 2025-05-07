@@ -13,18 +13,23 @@
 #include <unordered_map>
 #include <algorithm>
 #include <queue>
-#include <iglfw/glfw_window.h>
 #include <prosper_context_object.hpp>
 #include <sharedutils/chronotime.h>
 #include "types.hpp"
+
+import pragma.platform;
+#ifdef __linux__
+import pragma.string.unicode;
+#else
+namespace pragma::string {
+	class Utf8String;
+};
+#endif
 
 #undef GetClassName
 #undef FindWindow
 #undef DrawState
 
-namespace pragma::string {
-	class Utf8String;
-};
 namespace GLFW {
 	class Joystick;
 };
@@ -53,6 +58,7 @@ namespace wgui {
 	class ShaderTexturedRect;
 	class ShaderTexturedRectExpensive;
 	class ShaderStencil;
+	class ShaderTexturedSubRect;
 };
 
 namespace wgui {
@@ -140,9 +146,9 @@ class DLLWGUI WGUI : public prosper::ContextObject {
 	void Think(const std::shared_ptr<prosper::IPrimaryCommandBuffer> &drawCmd);
 	void Draw(const prosper::Window &window, prosper::ICommandBuffer &drawCmd);
 	void Draw(WIBase &el, prosper::IRenderPass &rp, prosper::IFramebuffer &fb, prosper::ICommandBuffer &drawCmd);
-	bool HandleJoystickInput(prosper::Window &window, const GLFW::Joystick &joystick, uint32_t key, GLFW::KeyState state);
-	bool HandleMouseInput(prosper::Window &window, GLFW::MouseButton button, GLFW::KeyState state, GLFW::Modifier mods);
-	bool HandleKeyboardInput(prosper::Window &window, GLFW::Key key, int scanCode, GLFW::KeyState state, GLFW::Modifier mods);
+	bool HandleJoystickInput(prosper::Window &window, const pragma::platform::Joystick &joystick, uint32_t key, pragma::platform::KeyState state);
+	bool HandleMouseInput(prosper::Window &window, pragma::platform::MouseButton button, pragma::platform::KeyState state, pragma::platform::Modifier mods);
+	bool HandleKeyboardInput(prosper::Window &window, pragma::platform::Key key, int scanCode, pragma::platform::KeyState state, pragma::platform::Modifier mods);
 	bool HandleCharInput(prosper::Window &window, unsigned int c);
 	bool HandleScrollInput(prosper::Window &window, Vector2 offset);
 	bool HandleFileDragEnter(prosper::Window &window);
@@ -159,16 +165,18 @@ class DLLWGUI WGUI : public prosper::ContextObject {
 	WIRoot *FindRootElementUnderCursor();
 	template<class TSkin>
 	TSkin *RegisterSkin(std::string id, bool bReload = false);
+	WISkin *RegisterSkin(std::string id, std::unique_ptr<WISkin> &&skin);
 	void SetSkin(std::string skin);
 	std::string GetSkinName();
 	WISkin *GetSkin();
 	WISkin *GetSkin(std::string name);
-	void SetCursor(GLFW::Cursor::Shape cursor, prosper::Window *optWindow = nullptr);
-	void SetCursor(GLFW::Cursor &cursor, prosper::Window *optWindow = nullptr);
+	void ClearSkins();
+	void SetCursor(pragma::platform::Cursor::Shape cursor, prosper::Window *optWindow = nullptr);
+	void SetCursor(pragma::platform::Cursor &cursor, prosper::Window *optWindow = nullptr);
 	void ResetCursor(prosper::Window *optWindow = nullptr);
-	void SetCursorInputMode(GLFW::CursorMode mode, prosper::Window *optWindow = nullptr);
-	GLFW::Cursor::Shape GetCursor(const prosper::Window *optWindow = nullptr);
-	GLFW::CursorMode GetCursorInputMode(const prosper::Window *optWindow = nullptr);
+	void SetCursorInputMode(pragma::platform::CursorMode mode, prosper::Window *optWindow = nullptr);
+	pragma::platform::Cursor::Shape GetCursor(const prosper::Window *optWindow = nullptr);
+	pragma::platform::CursorMode GetCursorInputMode(const prosper::Window *optWindow = nullptr);
 	msys::MaterialManager &GetMaterialManager();
 	void SetMaterialLoadHandler(const std::function<Material *(const std::string &)> &handler);
 	const std::function<Material *(const std::string &)> &GetMaterialLoadHandler() const;
@@ -192,6 +200,7 @@ class DLLWGUI WGUI : public prosper::ContextObject {
 	wgui::ShaderTextRect *GetTextRectShader();
 	wgui::ShaderTextRectColor *GetTextRectColorShader();
 	wgui::ShaderTextured *GetTexturedShader();
+	wgui::ShaderTexturedSubRect *GetTexturedSubRectShader();
 	wgui::ShaderTexturedRect *GetTexturedRectShader();
 	wgui::ShaderTexturedRectExpensive *GetTexturedRectExpensiveShader();
 	wgui::ShaderStencil *GetStencilShader();
@@ -204,7 +213,7 @@ class DLLWGUI WGUI : public prosper::ContextObject {
 	std::atomic<bool> m_lockedForDrawing = false;
 	WISkin *m_skin = nullptr;
 	bool m_bGUIUpdateRequired = false;
-	std::unordered_map<std::string, WISkin *> m_skins = {};
+	std::unordered_map<std::string, std::unique_ptr<WISkin>> m_skins = {};
 	std::weak_ptr<msys::MaterialManager> m_matManager = {};
 	std::function<Material *(const std::string &)> m_materialLoadHandler = nullptr;
 	std::shared_ptr<prosper::IUniformResizableBuffer> m_elementBuffer = nullptr;
@@ -227,7 +236,7 @@ class DLLWGUI WGUI : public prosper::ContextObject {
 	std::priority_queue<wgui::detail::UpdateInfo, std::vector<wgui::detail::UpdateInfo>, wgui::detail::UpdatePriority> m_updateQueue;
 	std::optional<uint32_t> m_currentUpdateDepth = {};
 	std::queue<WIHandle> m_removeQueue;
-	std::vector<std::unique_ptr<GLFW::Cursor>> m_cursors;
+	std::vector<std::unique_ptr<pragma::platform::Cursor>> m_cursors;
 	std::function<void(WIBase &)> m_createCallback = nullptr;
 	std::function<void(WIBase &)> m_removeCallback = nullptr;
 	std::function<void(WIBase *, WIBase *)> m_onFocusChangedCallback = nullptr;
@@ -243,6 +252,7 @@ class DLLWGUI WGUI : public prosper::ContextObject {
 	util::WeakHandle<prosper::Shader> m_shaderTextCheap = {};
 	util::WeakHandle<prosper::Shader> m_shaderTextCheapColor = {};
 	util::WeakHandle<prosper::Shader> m_shaderTextured = {};
+	util::WeakHandle<prosper::Shader> m_shaderTexturedSubRect = {};
 	util::WeakHandle<prosper::Shader> m_shaderTexturedCheap = {};
 	util::WeakHandle<prosper::Shader> m_shaderTexturedExpensive = {};
 	util::WeakHandle<prosper::Shader> m_shaderStencil = {};
@@ -258,19 +268,11 @@ REGISTER_BASIC_ARITHMETIC_OPERATORS(WGUI::ElementBuffer);
 template<class TSkin>
 TSkin *WGUI::RegisterSkin(std::string id, bool bReload)
 {
-	std::transform(id.begin(), id.end(), id.begin(), ::tolower);
-	std::unordered_map<std::string, WISkin *>::iterator it = m_skins.find(id);
-	if(it != m_skins.end()) {
-		if(bReload == false)
-			return NULL;
-		if(m_skin == it->second)
-			ClearSkin();
-		delete it->second;
-		m_skins.erase(it);
-	}
-	TSkin *skin = new TSkin(id);
-	m_skins.insert(std::unordered_map<std::string, WISkin *>::value_type(id, skin));
-	return skin;
+	ustring::to_lower(id);
+	if(m_skins.find(id) != m_skins.end() && !bReload)
+		return nullptr;
+	auto skin = std::unique_ptr<WISkin> {new TSkin {id}};
+	return static_cast<TSkin *>(RegisterSkin(id, std::move(skin)));
 }
 
 template<class TElement>

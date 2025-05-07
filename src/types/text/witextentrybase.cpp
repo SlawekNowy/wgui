@@ -12,10 +12,12 @@
 #include <util_formatted_text_line.hpp>
 #include <prosper_context.hpp>
 #include <prosper_window.hpp>
+#include <exprtk.hpp>
 #include <codecvt>
 
-LINK_WGUI_TO_CLASS(WITextEntryBase, WITextEntryBase);
+import pragma.string.unicode;
 
+LINK_WGUI_TO_CLASS(WITextEntryBase, WITextEntryBase);
 WITextEntryBase::WITextEntryBase() : WIBase(), m_posCaret(0), m_tBlink(0), m_selectStart(-1), m_selectEnd(-1), m_maxLength(-1)
 {
 	RegisterCallback<void>("OnTextEntered");
@@ -140,7 +142,30 @@ void WITextEntryBase::SetEntryFieldElement(WIBase *el) { m_hEntryFieldElement = 
 
 WITextEntryBase::~WITextEntryBase() { KillFocus(); }
 
-void WITextEntryBase::OnEnter() { CallCallbacks<void>("OnTextEntered"); }
+void WITextEntryBase::OnEnter()
+{
+	if(IsNumeric()) {
+		using T = float;
+		typedef exprtk::symbol_table<T> symbol_table_t;
+		typedef exprtk::expression<T> expression_t;
+		typedef exprtk::parser<T> parser_t;
+
+		const std::string expression_string = GetText();
+
+		symbol_table_t symbol_table;
+		symbol_table.add_function("deg", +[](float v) -> float { return umath::rad_to_deg(v); });
+		symbol_table.add_function("rad", +[](float v) -> float { return umath::deg_to_rad(v); });
+
+		expression_t expression;
+		expression.register_symbol_table(symbol_table);
+
+		parser_t parser;
+		if(parser.compile(expression_string, expression))
+			SetText(std::to_string(expression.value()));
+	}
+
+	CallCallbacks<void>("OnTextEntered");
+}
 
 void WITextEntryBase::SetSize(int x, int y)
 {
@@ -174,7 +199,7 @@ void WITextEntryBase::OnFocusGained()
 	if(m_hCaret.IsValid()) {
 		WIRect *pRect = static_cast<WIRect *>(m_hCaret.get());
 		pRect->SetVisible(true);
-		m_tBlink = GLFW::get_time();
+		m_tBlink = pragma::platform::get_time();
 	}
 	EnableThinking();
 	auto *elIme = m_hEntryFieldElement.valid() ? m_hEntryFieldElement.get() : this;
@@ -226,7 +251,7 @@ void WITextEntryBase::Think(const std::shared_ptr<prosper::IPrimaryCommandBuffer
 	if(HasFocus()) {
 		if(m_hCaret.IsValid()) {
 			WIRect *pCaret = static_cast<WIRect *>(m_hCaret.get());
-			auto t = GLFW::get_time();
+			auto t = pragma::platform::get_time();
 			auto tDelta = static_cast<uint32_t>((t - m_tBlink) * 1.8);
 			if(int(tDelta) % 2 == 0)
 				pCaret->SetVisible(true);
@@ -235,7 +260,7 @@ void WITextEntryBase::Think(const std::shared_ptr<prosper::IPrimaryCommandBuffer
 		}
 		auto &context = WGUI::GetInstance().GetContext();
 		auto *window = GetRootWindow();
-		if(window && (*window)->GetMouseButtonState(GLFW::MouseButton::Left) == GLFW::KeyState::Press && m_bWasDoubleClick == false) {
+		if(window && (*window)->GetMouseButtonState(pragma::platform::MouseButton::Left) == pragma::platform::KeyState::Press && m_bWasDoubleClick == false) {
 			if(m_selectStart != -1) {
 				int pos = GetCharPos();
 				if(pos != -1) {
@@ -257,7 +282,7 @@ WIRect *WITextEntryBase::GetCaretElement() { return static_cast<WIRect *>(m_hCar
 
 void WITextEntryBase::SetCaretPos(int pos)
 {
-	m_tBlink = GLFW::get_time();
+	m_tBlink = pragma::platform::get_time();
 	auto *pText = GetTextElement();
 	if(pText == nullptr)
 		return;
@@ -404,11 +429,11 @@ int WITextEntryBase::GetCharPos() const
 }
 
 //#include <iostream>
-util::EventReply WITextEntryBase::MouseCallback(GLFW::MouseButton button, GLFW::KeyState state, GLFW::Modifier mods)
+util::EventReply WITextEntryBase::MouseCallback(pragma::platform::MouseButton button, pragma::platform::KeyState state, pragma::platform::Modifier mods)
 {
 	m_bWasDoubleClick = false;
-	auto shiftClick = state == GLFW::KeyState::Press && umath::is_flag_set(mods, GLFW::Modifier::Shift);
-	if((state == GLFW::KeyState::Release && m_selectEnd == -1) || shiftClick) {
+	auto shiftClick = state == pragma::platform::KeyState::Press && umath::is_flag_set(mods, pragma::platform::Modifier::Shift);
+	if((state == pragma::platform::KeyState::Release && m_selectEnd == -1) || shiftClick) {
 		if(shiftClick && m_selectStart == -1)
 			SetSelectionStart(GetCaretPos());
 		if(m_selectStart != -1) {
@@ -419,7 +444,7 @@ util::EventReply WITextEntryBase::MouseCallback(GLFW::MouseButton button, GLFW::
 				SetSelectionEnd(pos);
 		}
 	}
-	else if(state == GLFW::KeyState::Press) {
+	else if(state == pragma::platform::KeyState::Press) {
 		RequestFocus();
 		if(m_hText.IsValid()) {
 			int pos = GetCharPos();
@@ -564,14 +589,14 @@ bool WITextEntryBase::RemoveSelectedText()
 	return true;
 }
 
-util::EventReply WITextEntryBase::KeyboardCallback(GLFW::Key key, int scanCode, GLFW::KeyState state, GLFW::Modifier mods)
+util::EventReply WITextEntryBase::KeyboardCallback(pragma::platform::Key key, int scanCode, pragma::platform::KeyState state, pragma::platform::Modifier mods)
 {
 	if(WIBase::KeyboardCallback(key, scanCode, state, mods) == util::EventReply::Handled)
 		return util::EventReply::Handled;
-	if(state == GLFW::KeyState::Press || state == GLFW::KeyState::Repeat) {
+	if(state == pragma::platform::KeyState::Press || state == pragma::platform::KeyState::Repeat) {
 		switch(key) {
-		case GLFW::Key::Backspace:
-		case GLFW::Key::Delete:
+		case pragma::platform::Key::Backspace:
+		case pragma::platform::Key::Delete:
 			{
 				if(IsEditable() == false)
 					break;
@@ -581,7 +606,7 @@ util::EventReply WITextEntryBase::KeyboardCallback(GLFW::Key key, int scanCode, 
 					if(!text.empty()) {
 						if(RemoveSelectedText())
 							break;
-						if(key == GLFW::Key::Backspace) {
+						if(key == pragma::platform::Key::Backspace) {
 							int pos = GetCaretPos();
 							if(pos > 0) {
 								auto &formattedText = pText->GetFormattedTextObject();
@@ -604,12 +629,12 @@ util::EventReply WITextEntryBase::KeyboardCallback(GLFW::Key key, int scanCode, 
 				}
 				break;
 			}
-		case GLFW::Key::Left:
-		case GLFW::Key::Right:
+		case pragma::platform::Key::Left:
+		case pragma::platform::Key::Right:
 			{
 				int pos = GetCaretPos();
-				SetCaretPos(pos + ((key == GLFW::Key::Right) ? 1 : -1));
-				if((mods & GLFW::Modifier::Shift) == GLFW::Modifier::Shift) {
+				SetCaretPos(pos + ((key == pragma::platform::Key::Right) ? 1 : -1));
+				if((mods & pragma::platform::Modifier::Shift) == pragma::platform::Modifier::Shift) {
 					int posNew = GetCaretPos();
 					if(pos != posNew) {
 						if(m_selectStart == -1)
@@ -624,8 +649,8 @@ util::EventReply WITextEntryBase::KeyboardCallback(GLFW::Key key, int scanCode, 
 				//std::cout<<"Selection bounds: ("<<m_selectStart<<")("<<m_selectEnd<<")"<<std::endl;
 				break;
 			}
-		case GLFW::Key::Up:
-		case GLFW::Key::Down:
+		case pragma::platform::Key::Up:
+		case pragma::platform::Key::Down:
 			{
 				if(m_hText.IsValid()) {
 					WIText *pText = static_cast<WIText *>(m_hText.get());
@@ -640,7 +665,7 @@ util::EventReply WITextEntryBase::KeyboardCallback(GLFW::Key key, int scanCode, 
 
 						TextLineIterator lineIt {*pText, curLine.first, curLine.second};
 						auto it = lineIt.begin();
-						if(key == GLFW::Key::Down)
+						if(key == pragma::platform::Key::Down)
 							++it;
 						else
 							--it;
@@ -654,7 +679,7 @@ util::EventReply WITextEntryBase::KeyboardCallback(GLFW::Key key, int scanCode, 
 								auto newPos = util::text::LAST_CHAR;
 								for(auto &charInfo : charIt) {
 									auto endOffset = charInfo.pxOffset + charInfo.pxWidth * 0.5;
-									if(endOffset < lenOfSubStringUpToCaret || (key == GLFW::Key::Up && endOffset == lenOfSubStringUpToCaret))
+									if(endOffset < lenOfSubStringUpToCaret || (key == pragma::platform::Key::Up && endOffset == lenOfSubStringUpToCaret))
 										continue;
 									auto formattedPos = formattedText.GetFormattedTextOffset(pLine->GetStartOffset());
 									if(formattedPos.has_value())
@@ -668,7 +693,7 @@ util::EventReply WITextEntryBase::KeyboardCallback(GLFW::Key key, int scanCode, 
 								}
 
 								SetCaretPos(newPos);
-								if((mods & GLFW::Modifier::Shift) == GLFW::Modifier::Shift) {
+								if((mods & pragma::platform::Modifier::Shift) == pragma::platform::Modifier::Shift) {
 									if(pos != newPos) {
 										if(m_selectStart == -1)
 											SetSelectionStart(pos);
@@ -685,7 +710,7 @@ util::EventReply WITextEntryBase::KeyboardCallback(GLFW::Key key, int scanCode, 
 				}
 				break;
 			}
-		case GLFW::Key::Enter:
+		case pragma::platform::Key::Enter:
 			if(!IsMultiLine() || IsEditable() == false) {
 				if(HasFocus()) {
 					KillFocus();
@@ -695,11 +720,11 @@ util::EventReply WITextEntryBase::KeyboardCallback(GLFW::Key key, int scanCode, 
 			else
 				CharCallback('\n');
 			break;
-		case GLFW::Key::V:
+		case pragma::platform::Key::V:
 			{
 				if(IsEditable() == false)
 					break;
-				if((mods & GLFW::Modifier::Control) == GLFW::Modifier::Control) {
+				if((mods & pragma::platform::Modifier::Control) == pragma::platform::Modifier::Control) {
 					RemoveSelectedText();
 					auto &context = WGUI::GetInstance().GetContext();
 					auto *window = GetRootWindow();
@@ -708,10 +733,10 @@ util::EventReply WITextEntryBase::KeyboardCallback(GLFW::Key key, int scanCode, 
 				}
 				break;
 			}
-		case GLFW::Key::C:
-		case GLFW::Key::X:
+		case pragma::platform::Key::C:
+		case pragma::platform::Key::X:
 			{
-				if((mods & GLFW::Modifier::Control) == GLFW::Modifier::Control) {
+				if((mods & pragma::platform::Modifier::Control) == pragma::platform::Modifier::Control) {
 					if(m_selectStart != -1 && m_selectEnd != -1) {
 						auto &context = WGUI::GetInstance().GetContext();
 						auto *window = GetRootWindow();
@@ -729,15 +754,15 @@ util::EventReply WITextEntryBase::KeyboardCallback(GLFW::Key key, int scanCode, 
 								}
 							}
 						}
-						if(key == GLFW::Key::X && IsEditable())
+						if(key == pragma::platform::Key::X && IsEditable())
 							RemoveSelectedText();
 					}
 				}
 				break;
 			}
-		case GLFW::Key::A:
+		case pragma::platform::Key::A:
 			{
-				if((mods & GLFW::Modifier::Control) == GLFW::Modifier::Control) {
+				if((mods & pragma::platform::Modifier::Control) == pragma::platform::Modifier::Control) {
 					auto *pText = GetTextElement();
 					if(pText) {
 						auto &formattedTextObject = pText->GetFormattedTextObject();
@@ -750,7 +775,7 @@ util::EventReply WITextEntryBase::KeyboardCallback(GLFW::Key key, int scanCode, 
 				}
 				break;
 			}
-		case GLFW::Key::Tab:
+		case pragma::platform::Key::Tab:
 			return CharCallback('\t', mods);
 		default:
 			break;
@@ -766,12 +791,12 @@ static std::string utf8char_to_str(unsigned int c)
 	wstr.push_back(unicodeCharacter);
 	return ustring::wstring_to_string(wstr);
 }
-util::EventReply WITextEntryBase::CharCallback(unsigned int c, GLFW::Modifier mods)
+util::EventReply WITextEntryBase::CharCallback(unsigned int c, pragma::platform::Modifier mods)
 {
 	//std::cout<<"CharCallback: "<<c<<std::endl;
 	if(IsEditable() == false)
 		return util::EventReply::Unhandled;
-	if(!IsNumeric() || (c >= 48 && c <= 57) || (IsMultiLine() && c == '\n')) {
+	if(/*!IsNumeric() ||*/ true || (c >= 48 && c <= 57) || (IsMultiLine() && c == '\n')) {
 		auto *pText = GetTextElement();
 		auto shouldInsert = true;
 		if(pText && m_maxLength >= 0) {

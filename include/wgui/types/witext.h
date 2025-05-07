@@ -19,18 +19,20 @@
 #ifdef __linux__
 #include "wgui/types/witext_tags.hpp"
 #endif
-
+#ifdef __linux__
+import pragma.string.unicode;
+#else
+namespace pragma::string {
+	class Utf8String;
+	class Utf8StringArg;
+};
+#endif
 namespace prosper {
 	class IBuffer;
 	class Shader;
 	class BlurSet;
 	class IUniformResizableBuffer;
 	class IDescriptorSet;
-};
-
-namespace pragma::string {
-	class Utf8String;
-	class Utf8StringArg;
 };
 
 namespace util {
@@ -138,7 +140,8 @@ class DLLWGUI WIText : public WIBase {
 	const pragma::string::Utf8String &GetFormattedText() const;
 	void SetText(const pragma::string::Utf8StringArg &text);
 	void SetFont(const std::string_view &font);
-	void SetFont(const FontInfo *font);
+	void SetFont(const FontInfo *font, bool reload = false);
+	void ReloadFont();
 	void SetAutoBreakMode(AutoBreak b);
 	AutoBreak GetAutoBreakMode() const;
 	using WIBase::SetSize;
